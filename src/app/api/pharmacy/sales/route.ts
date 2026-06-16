@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET - تمام سیلز
+// GET - All sales
 export async function GET() {
   try {
     const sales = await db.sale.findMany({
@@ -23,12 +23,12 @@ export async function GET() {
   }
 }
 
-// POST - نیا سیل
+// POST - New sale
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
-    // انوائس نمبر بناؤ
+    // Generate invoice number
     const lastSale = await db.sale.findFirst({
       orderBy: { createdAt: 'desc' }
     })
@@ -36,20 +36,21 @@ export async function POST(request: NextRequest) {
       ? `INV-${String(parseInt(lastSale.invoiceNumber.split('-')[1]) + 1).padStart(6, '0')}`
       : 'INV-000001'
 
-    // ٹوٹل حساب کریں
+    // Calculate total
     const subtotal = body.items.reduce((sum: number, item: any) => sum + (item.price * item.quantity), 0)
-    const total = subtotal
+    const discount = body.discount || 0
+    const total = subtotal - discount
 
-    // سیل بناؤ
+    // Create sale
     const sale = await db.sale.create({
       data: {
         invoiceNumber,
         customerId: (body.customerId && body.customerId !== "none") ? body.customerId : null,
         subtotal,
-        discount: 0,
+        discount,
         tax: 0,
         total,
-        paymentMethod: 'cash',
+        paymentMethod: body.paymentMethod || 'cash',
         status: 'completed',
         items: {
           create: body.items.map((item: any) => ({
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // اسٹاک اپڈیٹ کریں
+    // Update stock
     for (const item of body.items) {
       await db.medicine.update({
         where: { id: item.medicineId },
@@ -82,13 +83,13 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      // اسٹاک لاگ بناؤ
+      // Create stock log
       await db.stockLog.create({
         data: {
           medicineId: item.medicineId,
           type: 'sale',
           quantity: -item.quantity,
-          notes: `سیل ${invoiceNumber}`
+          notes: `Sale ${invoiceNumber}`
         }
       })
     }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET - سارے میڈیسنز لانے
+// GET - All medicines
 export async function GET() {
   try {
     const medicines = await db.medicine.findMany({
@@ -20,7 +20,7 @@ export async function GET() {
   }
 }
 
-// POST - نیا میڈیسین بنانا
+// POST - New medicine
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -35,7 +35,10 @@ export async function POST(request: NextRequest) {
         minStock: body.minStock || 10,
         batchNumber: body.batchNumber || null,
         expiryDate: body.expiryDate ? new Date(body.expiryDate) : null,
-        supplierId: body.supplierId || null
+        supplierId: body.supplierId || null,
+        barcode: body.barcode || null,
+        manufacturer: body.manufacturer || null,
+        description: body.description || null
       },
       include: {
         category: true,
@@ -43,13 +46,13 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // اسٹاک لاگ بناؤ
+    // Create stock log
     await db.stockLog.create({
       data: {
         medicineId: medicine.id,
         type: 'purchase',
         quantity: body.stock,
-        notes: 'نیا میڈیسین شامل کیا گیا'
+        notes: 'New medicine added'
       }
     })
 
@@ -60,7 +63,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE - میڈیسین ڈیلیٹ کرنا
+// DELETE - Soft delete medicine
 export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
