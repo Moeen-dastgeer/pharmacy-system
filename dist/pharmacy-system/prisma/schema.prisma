@@ -1,0 +1,213 @@
+// Pharmacy Management System - Complete Database Schema
+// فارمیسی منجنمنٹ سسٹم - مکمل ڈیٹا بیس اسکیمہ
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ===== کیٹیگریز (Categories) =====
+model Category {
+  id          String     @id @default(cuid())
+  name        String
+  description String?
+  medicines   Medicine[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+// ===== ادویات (Medicines) =====
+model Medicine {
+  id          String      @id @default(cuid())
+  name        String
+  genericName String?
+  description String?
+  categoryId  String?
+  category    Category?   @relation(fields: [categoryId], references: [id])
+  price       Float
+  stock       Int         @default(0)
+  minStock    Int         @default(10)
+  batchNumber String?
+  expiryDate  DateTime?
+  manufacturer String?
+  supplier    Supplier?   @relation(fields: [supplierId], references: [id])
+  supplierId  String?
+  barcode     String?     @unique
+  unit        String      @default("pieces")
+  isActive    Boolean     @default(true)
+  saleItems   SaleItem[]
+  purchaseItems PurchaseItem[]
+  stockLogs   StockLog[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([categoryId])
+  @@index([supplierId])
+  @@index([expiryDate])
+  @@index([barcode])
+}
+
+// ===== کسٹمرز (Customers) =====
+model Customer {
+  id        String     @id @default(cuid())
+  name      String
+  email     String?    @unique
+  phone     String?
+  address   String?
+  taxId     String?
+  sales     Sale[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+// ===== سپلائرز (Suppliers) =====
+model Supplier {
+  id        String     @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  taxId     String?
+  medicines Medicine[]
+  purchases PurchaseOrder[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+// ===== سیلز (Sales) =====
+model Sale {
+  id            String     @id @default(cuid())
+  invoiceNumber String     @unique
+  customerId    String?
+  customer      Customer?  @relation(fields: [customerId], references: [id])
+  subtotal      Float
+  discount      Float      @default(0)
+  tax           Float      @default(0)
+  total         Float
+  paymentMethod String     @default("cash")
+  status        String     @default("completed")
+  notes         String?
+  items         SaleItem[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([customerId])
+  @@index([invoiceNumber])
+  @@index([createdAt])
+}
+
+// ===== سیل آئٹمز (Sale Items) =====
+model SaleItem {
+  id         String   @id @default(cuid())
+  saleId     String
+  sale       Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  medicineId String
+  medicine   Medicine @relation(fields: [medicineId], references: [id])
+  quantity   Int
+  unitPrice  Float
+  discount   Float    @default(0)
+  total      Float
+  createdAt  DateTime @default(now())
+
+  @@index([saleId])
+  @@index([medicineId])
+}
+
+// ===== پurch آرڈرز (Purchase Orders) =====
+model PurchaseOrder {
+  id            String        @id @default(cuid())
+  orderNumber   String        @unique
+  supplierId    String?
+  supplier      Supplier?     @relation(fields: [supplierId], references: [id])
+  subtotal      Float
+  discount      Float         @default(0)
+  tax           Float         @default(0)
+  total         Float
+  status        String        @default("pending")
+  receivedDate  DateTime?
+  notes         String?
+  items         PurchaseItem[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([supplierId])
+  @@index([orderNumber])
+}
+
+// ===== پurch آئٹمز (Purchase Items) =====
+model PurchaseItem {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  purchase    PurchaseOrder @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  medicineId  String
+  medicine    Medicine @relation(fields: [medicineId], references: [id])
+  quantity    Int
+  unitPrice   Float
+  discount    Float    @default(0)
+  total       Float
+  createdAt   DateTime @default(now())
+
+  @@index([purchaseId])
+  @@index([medicineId])
+}
+
+// ===== اسٹاک لاگز (Stock Logs) =====
+model StockLog {
+  id          String   @id @default(cuid())
+  medicineId  String
+  medicine    Medicine @relation(fields: [medicineId], references: [id])
+  type        String   // "purchase", "sale", "return", "adjustment"
+  quantity    Int
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([medicineId])
+  @@index([createdAt])
+}
+
+// ===== اسٹاف (Staff/Users) =====
+model Staff {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  phone     String?
+  role      String   @default("staff") // admin, pharmacist, staff
+  password  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ===== ڈسکاؤنٹ کوپنز (Discount Coupons) =====
+model Discount {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  type      String   // percentage, fixed
+  value     Float
+  minPurchase Float?
+  maxDiscount Float?
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean  @default(true)
+  usageCount Int    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ===== رپورٹ سیٹینگز (Report Settings) =====
+model ReportSettings {
+  id           String   @id @default(cuid())
+  pharmacyName String
+  address      String?
+  phone        String?
+  email        String?
+  taxRate      Float    @default(0)
+  currency     String   @default("PKR")
+  logo         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
