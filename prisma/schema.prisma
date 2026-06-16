@@ -1,5 +1,5 @@
 // Pharmacy Management System - Complete Database Schema
-// فارمیسی منجنمنٹ سسٹم - مکمل ڈیٹا بیس اسکیمہ
+// POS System + Stock Management + Returns + Rack System
 
 generator client {
   provider = "prisma-client-js"
@@ -10,7 +10,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ===== کیٹیگریز (Categories) =====
+// ===== Categories =====
 model Category {
   id          String     @id @default(cuid())
   name        String
@@ -20,38 +20,41 @@ model Category {
   updatedAt   DateTime   @updatedAt
 }
 
-// ===== ادویات (Medicines) =====
+// ===== Medicines =====
 model Medicine {
-  id          String      @id @default(cuid())
-  name        String
-  genericName String?
-  description String?
-  categoryId  String?
-  category    Category?   @relation(fields: [categoryId], references: [id])
-  price       Float
-  stock       Int         @default(0)
-  minStock    Int         @default(10)
-  batchNumber String?
-  expiryDate  DateTime?
-  manufacturer String?
-  supplier    Supplier?   @relation(fields: [supplierId], references: [id])
-  supplierId  String?
-  barcode     String?     @unique
-  unit        String      @default("pieces")
-  isActive    Boolean     @default(true)
-  saleItems   SaleItem[]
+  id            String      @id @default(cuid())
+  name          String
+  genericName   String?
+  description   String?
+  categoryId    String?
+  category      Category?   @relation(fields: [categoryId], references: [id])
+  price         Float
+  stock         Int         @default(0)
+  minStock      Int         @default(10)
+  batchNumber   String?
+  expiryDate    DateTime?
+  manufacturer  String?
+  supplier      Supplier?   @relation(fields: [supplierId], references: [id])
+  supplierId    String?
+  barcode       String?     @unique
+  unit          String      @default("pieces")
+  rackLocation  String?     // Where medicine is stored
+  isActive      Boolean     @default(true)
+  saleItems     SaleItem[]
   purchaseItems PurchaseItem[]
-  stockLogs   StockLog[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  stockLogs     StockLog[]
+  returns       ReturnItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   @@index([categoryId])
   @@index([supplierId])
   @@index([expiryDate])
   @@index([barcode])
+  @@index([rackLocation])
 }
 
-// ===== کسٹمرز (Customers) =====
+// ===== Customers =====
 model Customer {
   id        String     @id @default(cuid())
   name      String
@@ -60,11 +63,12 @@ model Customer {
   address   String?
   taxId     String?
   sales     Sale[]
+  returns   Return[]
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 }
 
-// ===== سپلائرز (Suppliers) =====
+// ===== Suppliers =====
 model Supplier {
   id        String     @id @default(cuid())
   name      String
@@ -78,7 +82,7 @@ model Supplier {
   updatedAt DateTime   @updatedAt
 }
 
-// ===== سیلز (Sales) =====
+// ===== Sales =====
 model Sale {
   id            String     @id @default(cuid())
   invoiceNumber String     @unique
@@ -89,9 +93,10 @@ model Sale {
   tax           Float      @default(0)
   total         Float
   paymentMethod String     @default("cash")
-  status        String     @default("completed")
+  status        String     @default("completed") // completed, returned, partial_return
   notes         String?
   items         SaleItem[]
+  returns       Return[]
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
@@ -100,7 +105,7 @@ model Sale {
   @@index([createdAt])
 }
 
-// ===== سیل آئٹمز (Sale Items) =====
+// ===== Sale Items =====
 model SaleItem {
   id         String   @id @default(cuid())
   saleId     String
@@ -111,13 +116,50 @@ model SaleItem {
   unitPrice  Float
   discount   Float    @default(0)
   total      Float
+  returnQuantity Int @default(0)
   createdAt  DateTime @default(now())
 
   @@index([saleId])
   @@index([medicineId])
 }
 
-// ===== پurch آرڈرز (Purchase Orders) =====
+// ===== Returns =====
+model Return {
+  id            String     @id @default(cuid())
+  returnNumber  String     @unique
+  saleId        String
+  sale          Sale       @relation(fields: [saleId], references: [id])
+  customerId    String?
+  customer      Customer?  @relation(fields: [customerId], references: [id])
+  subtotal      Float
+  refundAmount  Float
+  reason        String?
+  status        String     @default("approved") // pending, approved, rejected
+  items         ReturnItem[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([saleId])
+  @@index([customerId])
+}
+
+// ===== Return Items =====
+model ReturnItem {
+  id         String   @id @default(cuid())
+  returnId   String
+  return     Return   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  medicineId String
+  medicine   Medicine @relation(fields: [medicineId], references: [id])
+  quantity   Int
+  unitPrice  Float
+  total      Float
+  createdAt  DateTime @default(now())
+
+  @@index([returnId])
+  @@index([medicineId])
+}
+
+// ===== Purchase Orders =====
 model PurchaseOrder {
   id            String        @id @default(cuid())
   orderNumber   String        @unique
@@ -127,7 +169,7 @@ model PurchaseOrder {
   discount      Float         @default(0)
   tax           Float         @default(0)
   total         Float
-  status        String        @default("pending")
+  status        String        @default("pending") // pending, received, cancelled
   receivedDate  DateTime?
   notes         String?
   items         PurchaseItem[]
@@ -138,7 +180,7 @@ model PurchaseOrder {
   @@index([orderNumber])
 }
 
-// ===== پurch آئٹمز (Purchase Items) =====
+// ===== Purchase Items =====
 model PurchaseItem {
   id          String   @id @default(cuid())
   purchaseId  String
@@ -155,21 +197,35 @@ model PurchaseItem {
   @@index([medicineId])
 }
 
-// ===== اسٹاک لاگز (Stock Logs) =====
+// ===== Stock Logs =====
 model StockLog {
   id          String   @id @default(cuid())
   medicineId  String
   medicine    Medicine @relation(fields: [medicineId], references: [id])
-  type        String   // "purchase", "sale", "return", "adjustment"
-  quantity    Int
+  type        String   // "purchase", "sale", "return", "adjustment", "transfer"
+  quantity    Int      // positive for in, negative for out
   notes       String?
+  reference   String?  // invoice number or order number
   createdAt   DateTime @default(now())
 
   @@index([medicineId])
   @@index([createdAt])
+  @@index([type])
 }
 
-// ===== اسٹاف (Staff/Users) =====
+// ===== Stock Transfers =====
+model StockTransfer {
+  id          String   @id @default(cuid())
+  transferNumber String @unique
+  medicineId  String
+  fromRack    String?
+  toRack      String?
+  quantity    Int
+  reason      String?
+  createdAt   DateTime @default(now())
+}
+
+// ===== Staff =====
 model Staff {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -182,7 +238,7 @@ model Staff {
   updatedAt DateTime @updatedAt
 }
 
-// ===== ڈسکاؤنٹ کوپنز (Discount Coupons) =====
+// ===== Discounts =====
 model Discount {
   id        String   @id @default(cuid())
   code      String   @unique
@@ -198,7 +254,7 @@ model Discount {
   updatedAt DateTime @updatedAt
 }
 
-// ===== رپورٹ سیٹینگز (Report Settings) =====
+// ===== Report Settings =====
 model ReportSettings {
   id           String   @id @default(cuid())
   pharmacyName String
